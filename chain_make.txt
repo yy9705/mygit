@@ -1,0 +1,176 @@
+#include <stdlib.h>
+#include <stdio.h>
+
+
+struct ChainNode {
+    int data;
+    struct ChainNode *next;
+};
+
+struct ChainNode *Delete_duplicate_lists(struct ChainNode *head)  //删除链表里重复的数据
+{
+    if(head == NULL)
+    {
+        return NULL;
+    }
+    struct ChainNode *cur = head;
+    struct ChainNode *next = head->next;
+    while(next != NULL)
+    { 
+        if(next->data == cur->data)
+        {
+            struct ChainNode *temp = next;
+            cur->next = next->next;
+            next = next->next;
+            free(temp);
+        }
+        else
+        {
+            cur = cur->next;
+            next = next->next;
+        }
+    }
+    return head;
+}
+
+struct ChainNode *chainInit(int *data, size_t len) {                  //初始化单链表
+
+    struct ChainNode *head = NULL;
+    struct ChainNode *pos;
+    for (size_t i = 0; i < len; ++i) {
+        if (head == NULL) {
+            head = (struct ChainNode *) malloc(sizeof(struct ChainNode));
+            head->data = data[i];
+            pos = head;
+        } else {
+            pos->next = (struct ChainNode *) malloc(sizeof(struct ChainNode));
+            pos->next->data = data[i];
+            pos = pos->next;
+        }
+    }
+    if (head) pos->next = NULL;
+    return head;
+}
+
+size_t chainLength(struct ChainNode *chain) {                    //返回链表的长度
+    size_t size = 0;
+    struct ChainNode *pos = chain;
+    while (pos != NULL) {
+        ++size;
+        pos = pos->next;
+    }
+    return size;
+}
+
+int chainAt(struct ChainNode *chain, size_t _pos, int *buffer) {        //找到相对应数组下标的数据
+
+    struct ChainNode *pos = chain;
+    for (size_t i = 0; i < _pos; ++i) {
+        pos = pos->next;
+    }
+    *buffer = pos->data;
+    return 0;
+}
+
+int chain2Array(struct ChainNode *chain, int *buffer, size_t len) {    //链表转为数组形式
+    size_t _len = chainLength(chain);
+    size_t i;
+    struct ChainNode *pos = chain;
+    if (len < _len) {
+        return -1;
+    }
+    for (i = 0; i < _len; ++i) {
+        buffer[i] = pos->data;
+        pos = pos->next;
+    }
+    return i + 1;
+}
+
+int chainInsert(struct ChainNode *chain, size_t _pos, int data) {    //插入链表
+
+    struct ChainNode *pos = chain;
+    int temp;
+    
+    if(_pos >= 1)
+    {
+    for (size_t i = 0; i < _pos-1; ++i)
+      {
+        pos = pos->next;
+      }
+    }
+   
+    struct ChainNode *ins = (struct ChainNode *)malloc(sizeof(struct ChainNode));
+    ins->data = data;
+
+    if (_pos == 0)
+    {
+        ins->next = pos->next;
+        pos->next = ins;
+        temp = ins->data;
+        ins->data = pos->data;
+        pos->data = temp;
+    }
+
+    else
+    {
+        ins->next = pos->next;
+        pos->next = ins;
+    }
+    return 0;
+}
+   
+
+int chainDelete(struct ChainNode *chain, size_t _pos) {                  //删除链表
+
+    struct ChainNode *pos = chain;
+    int temp;
+    if(_pos >= 1)
+    {
+      for (size_t i = 0; i < _pos - 1; ++i) 
+      {
+          pos = pos->next;
+      }
+    }
+    if (_pos == 0) {
+       temp = pos->data;
+       pos->data = pos->next->data;
+       pos->next->data = temp;
+        struct ChainNode *npos = pos->next->next;
+        free(pos->next);
+        pos->next = npos;
+    } else {
+        struct ChainNode *rpos = pos->next->next;
+        free(pos->next);
+        pos->next = rpos;
+    }
+    return 0;
+}
+
+void chainDestory(struct ChainNode *chain) {                           //销毁链表
+    if (chain == NULL) {
+        return;
+    }
+    struct ChainNode *pos = chain->next, *ele = chain;
+    do {
+        free(ele);
+        ele = pos;
+        pos = pos->next;
+    } while (pos != NULL);
+}
+
+ 
+int main()
+{
+    int a[6] = {0x22, 0x3c, 0x3d ,0x3e , 0x40, 0x3E};
+    int pos = 0;
+    struct ChainNode *chain = chainInit(a, 6);
+    chainDelete(chain,1);
+        for (size_t i = 0; i < chainLength(chain); ++i) {
+            int buffer;
+             chainAt(chain, i, &buffer);
+             printf("%x ", buffer);
+        }
+        chainDestory(chain);
+        printf("\nPress Any Key To Close Window.");
+        return 0;
+}

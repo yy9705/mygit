@@ -1,0 +1,254 @@
+#include "main.h"
+#include "spi_flash.h"
+
+static int time_check = time_out;
+flash_t spi_flash;
+
+/**********************************/
+
+void SPI2_Init(void)
+{
+	GPIO_InitTypeDef GPIO_InitTypeStruct;
+	SPI_InitTypeDef SPI_InitTypeStruct;
+	
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB & RCC_APB2Periph_GPIOA,ENABLE); //spi2 GPIOB
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2,ENABLE);  //spi2 init
+	
+	//NSS   PB12
+	GPIO_InitTypeStruct.GPIO_Mode=GPIO_Mode_Out_PP;
+	GPIO_InitTypeStruct.GPIO_Pin=GPIO_Pin_8;
+	GPIO_InitTypeStruct.GPIO_Speed=GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA,&GPIO_InitTypeStruct);
+	
+	//MISO PB14
+	GPIO_InitTypeStruct.GPIO_Mode=GPIO_Mode_AF_PP;
+	GPIO_InitTypeStruct.GPIO_Pin=GPIO_Pin_14;
+	GPIO_InitTypeStruct.GPIO_Speed=GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB,&GPIO_InitTypeStruct);
+	
+	//MOSI  PB15
+	GPIO_InitTypeStruct.GPIO_Mode=GPIO_Mode_AF_PP;
+	GPIO_InitTypeStruct.GPIO_Pin=GPIO_Pin_15;
+	GPIO_InitTypeStruct.GPIO_Speed=GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB,&GPIO_InitTypeStruct);
+	
+	//SCK PB13
+	GPIO_InitTypeStruct.GPIO_Mode=GPIO_Mode_AF_PP;
+	GPIO_InitTypeStruct.GPIO_Pin=GPIO_Pin_13;
+	GPIO_InitTypeStruct.GPIO_Speed=GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB,&GPIO_InitTypeStruct);
+	
+	//spi init
+	SPI_InitTypeStruct.SPI_BaudRatePrescaler=SPI_BaudRatePrescaler_2;
+	SPI_InitTypeStruct.SPI_CPHA=SPI_CPHA_2Edge;
+	SPI_InitTypeStruct.SPI_CPOL=SPI_CPOL_High;
+	SPI_InitTypeStruct.SPI_CRCPolynomial=7;
+	SPI_InitTypeStruct.SPI_DataSize=SPI_DataSize_8b;
+	SPI_InitTypeStruct.SPI_Direction=SPI_Direction_2Lines_FullDuplex;
+	SPI_InitTypeStruct.SPI_FirstBit=SPI_FirstBit_MSB;
+	SPI_InitTypeStruct.SPI_Mode=SPI_Mode_Master;
+	SPI_InitTypeStruct.SPI_NSS=SPI_NSS_Soft;
+	SPI_Init(SPI2,&SPI_InitTypeStruct);
+		
+	//spi cmd
+	SPI_Cmd(SPI2,ENABLE);
+	
+	//NSS high
+	NSS_High;
+	
+}
+
+void SPI2_SetSpeed(u8 SpeedSet)
+{
+	SpeedSet&=0X07;			//ÏÞÖÆ·¶Î§
+	SPI2->CR1&=0XFFC7; 
+	SPI2->CR1|=SpeedSet<<3;	//ÉèÖÃSPI2ËÙ¶È  
+	SPI2->CR1|=1<<6; 		//SPIÉè±¸Ê¹ÄÜ	  
+} 
+
+u8 flash_write_byte(u8 data)
+{
+	time_check = time_out;
+	while(SPI_I2S_GetFlagStatus(SPI2,SPI_I2S_FLAG_TXE) == RESET)
+	{
+		if((time_check--) == 0)	return 0;
+	}
+	SPI_I2S_SendData(SPI2,data);
+	
+	time_check = time_out;
+	while(SPI_I2S_GetFlagStatus(SPI2,SPI_I2S_FLAG_RXNE) == RESET)
+	{
+		if((time_check--) == 0)	return 0;
+	}
+	return SPI_I2S_ReceiveData(SPI2);
+}
+
+//ÏòflashÏÈÐ´Ò»¸ö¿Õ×Ö½Ú
+u8 flash_read_byte()
+{
+	return   flash_write_byte(DUMMY); 
+}
+
+//¶ÁÈ¡FLASHµÄID
+u32 flash_read_id(void)
+{
+	vu32 id_temp;
+	NSS_Low;
+	flash_write_byte(SFLASH_JEDEC_ID);
+	flash_write_byte(DUMMY);
+	id_temp =  flash_read_byte()<<16;
+	id_temp |= flash_read_byte()<<8;
+	id_temp |= flash_read_byte();
+	NSS_High;
+	return id_temp;
+}
+
+
+//´Óflash¶ÁÈ¡Êý¾Ý
+void flash_read_buf(u16 caddr, u8 *buf, u16 num_read)
+{
+	NSS_Low;
+	flash_write_byte(Read); 
+	flash_write_byte( (caddr>>8) & 0XFF );
+	flash_write_byte( (caddr) & 0XFF );
+	flash_write_byte(DUMMY);
+	while(num_read--)
+	{
+		*buf = flash_read_byte();
+		buf++; 
+	}
+	NSS_High;
+}
+
+
+
+void  flash_write_enable(void)  //Ð´Ê¹ÄÜº¯Êý
+{
+	NSS_Low;
+	flash_write_byte(WriteEnable);
+	NSS_High;
+}
+
+void flash_write_disable(void)  //Ð´Ê§ÄÜº¯Êý
+{
+	NSS_Low;
+	flash_write_byte(WriteDisable);
+	NSS_High;
+}
+
+void flash_reset(void)         //ÖØÆôº¯Êý
+{
+	NSS_Low;
+	flash_write_byte(SFLASH_Device_RESET);
+	NSS_High;
+}
+
+u8 flash_ReadStatusRegister(u8 SelectStatusRegister)
+{
+	u8 status = 0;
+	NSS_Low;
+	flash_write_byte(read_status_register);
+	flash_write_byte(SelectStatusRegister);
+	status = flash_read_byte();
+	spi_flash.StatusRegister = status;
+	NSS_High;
+	return status;
+}
+
+void flash_WriteStatusRegister(u8 SelectStatusRegister,u8 Data)
+{
+	NSS_Low;
+	flash_write_byte(write_status_register);
+	flash_write_byte(SelectStatusRegister);	
+	flash_write_byte(Data);
+	spi_flash.StatusRegister = Data;
+	NSS_High;
+}	
+
+void flash_Block_Erase(u16 BlockAddr)
+{
+	flash_write_enable();
+	NSS_Low;
+	flash_write_byte(block_erase);
+	flash_write_byte(DUMMY);
+	flash_write_byte( (BlockAddr>>8) & 0XFF );
+	flash_write_byte( (BlockAddr) & 0XFF );
+	NSS_High;
+}
+
+#ifndef __SPI_FLASH_H
+#define __SPI_FLASH_H
+
+#include "main.h"
+
+typedef struct
+
+{
+	uint8_t		StatusRegister;	
+
+}flash_t;
+
+extern flash_t spi_flash;
+/***********************************************
+           w25m02 ÃüÁî
+ **********************************************/
+  
+
+#define SFLASH_Device_RESET                              0XFF //Éè±¸ÖØÆô
+#define SFLASH_JEDEC_ID                                  0X9F //JEDEC ID
+#define WriteEnable                                      0X06 //Ð´Ê¹ÄÜ,ÉèÖÃ×´Ì¬¼Ä´æÆ÷
+#define WriteDisable                                     0X04 //Ð´Ê§ÄÜ
+#define Read                                             0X03  
+#define read_status_register                             0X05 
+#define Sector_Erase                                     0X20
+#define write_status_register                            0x01
+#define block_erase                                      0xD8
+
+
+#define DUMMY                                            0X00
+#define time_out                                         0XFFFE
+
+
+
+
+#define NSS_High                      GPIO_SetBits(GPIOA,GPIO_Pin_8)
+#define NSS_Low                       GPIO_ResetBits(GPIOA,GPIO_Pin_8)
+
+
+
+#define SPI_SPEED_2   		0
+#define SPI_SPEED_4   		1
+#define SPI_SPEED_8   		2
+#define SPI_SPEED_16  		3
+#define SPI_SPEED_32 		  4
+#define SPI_SPEED_64 		  5
+#define SPI_SPEED_128 		6
+#define SPI_SPEED_256 		7
+
+
+
+
+void SPI2_Init(void);
+u8 flash_write_byte(u8 data);
+u8 flash_read_byte(void);
+u32 flash_read_id(void);
+void SPI2_SetSpeed(u8 SpeedSet);
+void flash_read_buf(u16 caddr, u8 *buf, u16 num_read);
+void flash_write_enable(void);
+void flash_write_disable(void);
+void flash_reset(void);
+u8 flash_ReadStatusRegister(u8 SelectStatusRegister);
+void flash_WriteStatusRegister(u8 SelectStatusRegister,u8 Data);
+void flash_Block_Erase(u16 BlockAddr);
+
+#endif
+
+
+
+
+
+
+
+
+
+

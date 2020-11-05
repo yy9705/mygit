@@ -1,0 +1,34 @@
+#define  preamble   0x3C
+#define  interface  0x28
+#define  PHY_PACKET_Send   0x01 
+#define  Tail_Send  0x3E
+#define  LOOPSIZE   800
+
+unsigned char send_data[LOOPSIZE]={0};
+
+static void   SEND_to_ADESTO(unsigned char *inbuf,unsigned long len);
+
+
+static void   SEND_to_ADESTO(unsigned char *inbuf,unsigned long len)
+{     
+     static unsigned char check_sum=0;
+      send_data[0]=preamble;
+      send_data[1]=interface;
+      send_data[2]=PHY_PACKET_Send;
+      send_data[3]=(unsigned char)len<<8;
+      send_data[4]=(unsigned char)len&0xFF;
+      for(int i=0;i<len-2;i++)
+      {
+          inbuf[i]=send_data[i+5];
+      } 
+      for(int j=1;j<len-2;j++)
+      {
+          check_sum+=send_data[j];
+          check_sum=~check_sum+1;       
+      }
+      send_data[len-2]=check_sum;
+      send_data[len-1]=Tail_Send;
+}
+
+
+
